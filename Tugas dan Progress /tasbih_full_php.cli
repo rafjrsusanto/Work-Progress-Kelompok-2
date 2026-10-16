@@ -1,0 +1,308 @@
+
+<?php
+
+// APLIKASI TASBIH DIGITAL - PHP 5.6
+
+$stack = new SplStack();
+$queue = new SplQueue();
+$riwayat = array();
+
+$sesiAktif = null;
+$idSesi = 1;
+
+// Membaca input dari terminal
+function input($pesan)
+{
+    echo $pesan;
+    return trim(fgets(STDIN));
+}
+
+// Menampilkan menu utama
+function tampilkanMenu()
+{
+    echo "\n==============================\n";
+    echo "       TASBIH DIGITAL\n";
+    echo "==============================\n";
+    echo "1. Mulai sesi dzikir baru\n";
+    echo "2. Tambah hitungan\n";
+    echo "3. Undo hitungan terakhir\n";
+    echo "4. Tambah target ke antrean\n";
+    echo "5. Lihat antrean target\n";
+    echo "6. Mulai target berikutnya\n";
+    echo "7. Tampilkan riwayat\n";
+    echo "8. Cari riwayat dzikir\n";
+    echo "9. Urutkan jumlah terbanyak\n";
+    echo "10. Urutkan waktu terbaru\n";
+    echo "0. Keluar\n";
+    echo "------------------------------\n";
+}
+
+// Memulai sesi dzikir
+function mulaiSesi($nama, $target, &$idSesi, &$sesiAktif)
+{
+    $sesiAktif = array(
+        'id' => $idSesi,
+        'nama' => $nama,
+        'target' => $target,
+        'count' => 0,
+        'selesai' => false
+    );
+
+    $idSesi++;
+
+    echo "Sesi " . $nama . " dimulai.\n";
+    echo "Target: " . $target . " kali.\n";
+}
+
+// Program utama
+while (true) {
+    tampilkanMenu();
+    $pilihan = input("Pilih menu: ");
+
+    switch ($pilihan) {
+
+        // 1. Memulai sesi
+        case "1":
+            if ($sesiAktif !== null &&
+                !$sesiAktif['selesai']) {
+                echo "Selesaikan sesi aktif dahulu.\n";
+                break;
+            }
+
+            $nama = input("Nama dzikir: ");
+            $targetInput = input("Target hitungan: ");
+
+            if ($nama == "" ||
+                !ctype_digit($targetInput) ||
+                (int)$targetInput < 1) {
+                echo "Nama atau target tidak valid.\n";
+                break;
+            }
+
+            $stack = new SplStack();
+
+            mulaiSesi(
+                $nama,
+                (int)$targetInput,
+                $idSesi,
+                $sesiAktif
+            );
+            break;
+
+        // 2. Menambah hitungan dengan Stack
+        case "2":
+            if ($sesiAktif === null ||
+                $sesiAktif['selesai']) {
+                echo "Mulai sesi baru terlebih dahulu.\n";
+                break;
+            }
+
+            // Simpan hitungan sebelum berubah
+            $stack->push(array(
+                'count' => $sesiAktif['count'],
+                'selesai' => $sesiAktif['selesai']
+            ));
+
+            $sesiAktif['count']++;
+
+            echo "Dzikir: " . $sesiAktif['nama'] . "\n";
+            echo "Hitungan: " . $sesiAktif['count']
+                . " / " . $sesiAktif['target'] . "\n";
+
+            if ($sesiAktif['count'] >=
+                $sesiAktif['target']) {
+
+                $sesiAktif['selesai'] = true;
+
+                $riwayat[] = array(
+                    'id' => $sesiAktif['id'],
+                    'nama' => $sesiAktif['nama'],
+                    'jumlah' => $sesiAktif['count'],
+                    'waktu' => date('Y-m-d H:i:s')
+                );
+
+                echo "Alhamdulillah, target tercapai!\n";
+            }
+            break;
+
+        // 3. Undo dengan Stack (LIFO)
+        case "3":
+            if ($stack->isEmpty() ||
+                $sesiAktif === null) {
+                echo "Tidak ada hitungan untuk Undo.\n";
+                break;
+            }
+
+            $sebelumnya = $stack->pop();
+
+            // Batalkan riwayat jika target baru selesai
+            if ($sesiAktif['selesai']) {
+                $idBatal = $sesiAktif['id'];
+                $riwayatBaru = array();
+
+                foreach ($riwayat as $item) {
+                    if ($item['id'] != $idBatal) {
+                        $riwayatBaru[] = $item;
+                    }
+                }
+
+                $riwayat = $riwayatBaru;
+            }
+
+            $sesiAktif['count'] = $sebelumnya['count'];
+            $sesiAktif['selesai'] = $sebelumnya['selesai'];
+
+            echo "Undo berhasil.\n";
+            echo "Hitungan sekarang: "
+                . $sesiAktif['count'] . "\n";
+            break;
+
+        // 4. Menambahkan target ke Queue
+        case "4":
+            $nama = input("Nama target dzikir: ");
+            $targetInput = input("Target hitungan: ");
+
+            if ($nama == "" ||
+                !ctype_digit($targetInput) ||
+                (int)$targetInput < 1) {
+                echo "Nama atau target tidak valid.\n";
+                break;
+            }
+
+            $queue->enqueue(array(
+                'nama' => $nama,
+                'target' => (int)$targetInput
+            ));
+
+            echo "Target berhasil masuk antrean.\n";
+            break;
+
+        // 5. Melihat antrean dengan Traversal
+        case "5":
+            if ($queue->isEmpty()) {
+                echo "Antrean masih kosong.\n";
+                break;
+            }
+
+            echo "\nDAFTAR ANTREAN\n";
+            $nomor = 1;
+
+            foreach ($queue as $item) {
+                echo $nomor . ". " . $item['nama']
+                    . " - " . $item['target']
+                    . " kali\n";
+                $nomor++;
+            }
+            break;
+
+        // 6. Mengambil target pertama (FIFO)
+        case "6":
+            if ($sesiAktif !== null &&
+                !$sesiAktif['selesai']) {
+                echo "Selesaikan sesi aktif dahulu.\n";
+                break;
+            }
+
+            if ($queue->isEmpty()) {
+                echo "Antrean kosong.\n";
+                break;
+            }
+
+            $berikutnya = $queue->dequeue();
+            $stack = new SplStack();
+
+            mulaiSesi(
+                $berikutnya['nama'],
+                $berikutnya['target'],
+                $idSesi,
+                $sesiAktif
+            );
+            break;
+
+        // 7. Traversal riwayat dengan foreach
+        case "7":
+            if (empty($riwayat)) {
+                echo "Belum ada riwayat dzikir selesai.\n";
+                break;
+            }
+
+            echo "\nRIWAYAT DZIKIR\n";
+
+            foreach ($riwayat as $item) {
+                echo "Dzikir: " . $item['nama'] . "\n";
+                echo "Jumlah: " . $item['jumlah'] . " kali\n";
+                echo "Waktu: " . $item['waktu'] . "\n";
+                echo "------------------------------\n";
+            }
+            break;
+
+        // 8. Searching riwayat
+        case "8":
+            $cari = input("Nama dzikir yang dicari: ");
+            $ditemukan = false;
+
+            foreach ($riwayat as $item) {
+                if (stripos($item['nama'], $cari) !== false) {
+                    echo "Ditemukan: " . $item['nama']
+                        . " (" . $item['jumlah']
+                        . " kali)\n";
+                    $ditemukan = true;
+                }
+            }
+
+            if (!$ditemukan) {
+                echo "Dzikir tidak ditemukan.\n";
+            }
+            break;
+
+        // 9. Sorting jumlah terbesar
+        case "9":
+            if (empty($riwayat)) {
+                echo "Riwayat masih kosong.\n";
+                break;
+            }
+
+            usort($riwayat, function ($a, $b) {
+                if ($a['jumlah'] == $b['jumlah']) {
+                    return 0;
+                }
+                return ($a['jumlah'] > $b['jumlah']) ? -1 : 1;
+            });
+
+            echo "\nRIWAYAT JUMLAH TERBANYAK\n";
+
+            foreach ($riwayat as $item) {
+                echo $item['nama'] . " - "
+                    . $item['jumlah'] . " kali\n";
+            }
+            break;
+
+        // 10. Sorting waktu terbaru
+        case "10":
+            if (empty($riwayat)) {
+                echo "Riwayat masih kosong.\n";
+                break;
+            }
+
+            usort($riwayat, function ($a, $b) {
+                return strcmp($b['waktu'], $a['waktu']);
+            });
+
+            echo "\nRIWAYAT TERBARU\n";
+
+            foreach ($riwayat as $item) {
+                echo $item['waktu'] . " - "
+                    . $item['nama'] . " ("
+                    . $item['jumlah'] . " kali)\n";
+            }
+            break;
+
+        // 0. Keluar
+        case "0":
+            echo "Terima kasih. Wassalamu'alaikum!\n";
+            exit;
+
+        default:
+            echo "Pilihan tidak tersedia.\n";
+    }
+}
